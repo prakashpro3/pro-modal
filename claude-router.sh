@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch Claude Code against the Auto Model Router instead of the real Anthropic API.
+# Launch Claude Code against the Auto Modal instead of the real Anthropic API.
 # Env vars are set for THIS invocation only — your normal `claude` is unaffected.
 #
 # Usage:  ./claude-router.sh            (interactive)
@@ -24,5 +24,5 @@ export ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-auto}"
 # Use a free model for the small/fast (background) calls too.
 export ANTHROPIC_SMALL_FAST_MODEL="${ANTHROPIC_SMALL_FAST_MODEL:-auto}"
 
-echo "→ Claude Code via Auto Model Router (${ROUTER_URL}), model=${ANTHROPIC_MODEL}"
+echo "→ Claude Code via Auto Modal (${ROUTER_URL}), model=${ANTHROPIC_MODEL}"
 exec claude "$@"

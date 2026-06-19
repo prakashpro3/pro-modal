@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./loadenv.js";
 import express from "express";
 import { loadConfig, readRaw, writeRaw, buildConfig, PROVIDERS, resolveKeys } from "./config.js";
 import { recordSuccess, tripCooldown, isAvailable, tryConsumeToken, snapshot, historyFor } from "./usage.js";
@@ -36,7 +36,7 @@ function callUpstream(model, apiKey, body, signal, path) {
       Authorization: `Bearer ${apiKey}`,
       // OpenRouter likes these for attribution; harmless elsewhere.
       "HTTP-Referer": "http://localhost",
-      "X-Title": "auto-model-router",
+      "X-Title": "auto-modal",
     },
     body: JSON.stringify(payload),
   });
@@ -528,7 +528,7 @@ app.delete("/admin/models/:id", (req, res) => {
 });
 
 const server = app.listen(cfg.port, () => {
-  console.log(`auto-model-router listening on http://localhost:${cfg.port}`);
+  console.log(`auto-modal listening on http://localhost:${cfg.port}`);
   console.log(`  dashboard: http://localhost:${cfg.port}/`);
   console.log(`  chain: ${cfg.chain.map((m) => m.id).join(" -> ")}`);
 });

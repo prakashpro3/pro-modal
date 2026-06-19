@@ -1,4 +1,4 @@
-# Auto Model Router
+# Auto Modal
 
 ![Dashboard](dashboard.png)
 
@@ -40,10 +40,44 @@ client ──► router ──►  nemotron-free (OpenRouter)  key0 →429→ ke
 
 ---
 
-## Setup
+## Install as a CLI
+
+**Global** (one `automodal` command everywhere):
+```bash
+npm install -g @prakashpro1/auto-modal     # → `automodal` on your PATH
+automodal init                # creates ~/.auto-modal/{config.yaml,.env}
+# add your keys to ~/.auto-modal/.env  (or use the dashboard 🔑 panel)
+automodal                     # start the router → http://localhost:8787
+```
+
+**Per-project** (scoped to one repo, run via `npx`):
+```bash
+cd your-project
+npm install @prakashpro1/auto-modal              # add as a dependency
+npx automodal init --local          # creates ./.auto-modal/ for THIS project
+npx automodal                       # start it
+```
+Add `.auto-modal/` to the project's `.gitignore` — it holds your keys.
+
+Commands (run from anywhere):
+| Command | Does |
+|---|---|
+| `automodal` / `automodal start` | start the router (auto-kills any stale instance first) |
+| `automodal claude [args]` | launch Claude Code through the router |
+| `automodal init [--local]` | create global `~/.auto-modal` (or project `./.auto-modal`) |
+| `automodal where` | print which config / `.env` / `usage.json` is in effect |
+| `automodal --help` | usage |
+
+**Config resolution** (highest priority first):
+`AUTOMODAL_HOME` env  →  nearest `./.auto-modal` (walking up from cwd)  →  `~/.auto-modal`.
+
+So a project with its own `./.auto-modal/` uses that (its own chain + keys); anywhere
+else falls back to the global `~/.auto-modal/`. The CLI never writes inside the package.
+
+## Setup (from source / dev)
 
 ```bash
-cd <path-to-automodel>
+cd <path-to-automodal>
 npm install
 cp .env.example .env          # add your keys (comma-separated for multiple)
 npm start                     # → http://localhost:8787
@@ -95,23 +129,23 @@ CLI installed.
 
 ### Step 1 — Start the router (Terminal A)
 ```bash
-cd <path-to-automodel>
+cd <path-to-automodal>
 npm start
 curl -s http://localhost:8787/health     # → {"ok":true,"models":N}
 ```
 
 ### Step 2 — Launch Claude Code through the router (Terminal B)
+If you installed the global CLI, just run from anywhere:
 ```bash
-cd <path-to-automodel>
+automodal claude                          # interactive
+automodal claude -p "explain this repo"   # headless / one-shot
+```
+From source (no global install), use the bundled launcher:
+```bash
+cd <path-to-automodal>
 ./claude-router.sh                        # interactive
 ./claude-router.sh -p "explain this repo" # headless / one-shot
 ```
-
-**Tip — short command from anywhere.** Symlink the launcher onto your PATH once:
-```bash
-ln -sf "$PWD/claude-router.sh" ~/.local/bin/claudepro
-```
-Then just run `claudepro` (or `claudepro -p "..."`) from any directory.
 The launcher checks the router is up, then sets these **for that invocation only**
 (your normal `claude` stays on real Anthropic):
 ```bash

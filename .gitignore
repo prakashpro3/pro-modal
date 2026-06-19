@@ -1,4 +1,11 @@
 node_modules/
 .env
 usage.json
+*.tgz
 *.log
+.DS_Store
+
+# local CLI config homes (hold keys)
+.auto-modal/
+.pro-modal/
+.automodel/

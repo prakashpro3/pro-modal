@@ -1,0 +1,23 @@
+# Auto Modal — default config.
+# Edit here, or manage models live from the dashboard at http://localhost:8787/
+# ("+ Add a model" pulls each provider's catalog). Keys come from .env
+# (OPENROUTER_API_KEYS / HF_API_KEYS), comma-separated, and are rotated automatically.
+
+port: 8787
+cooldownMs: 3600000        # how long a rate-limited slot rests before retry
+transientRetries: 2        # retries on 5xx/timeout before rotating
+
+chain:                     # order = priority (tried top to bottom)
+  - id: nemotron-super-free
+    provider: openrouter
+    model: nvidia/nemotron-3-super-120b-a12b:free
+    apiKeys: ${OPENROUTER_API_KEYS}
+    dailyLimit: 50         # per key (OpenRouter free tier ~50/day)
+    rpm: 20                # per-key requests/min
+
+  # Add a HuggingFace fallback once HF_API_KEYS is set (auto-skipped until then):
+  - id: hf-qwen
+    provider: huggingface
+    model: Qwen/Qwen2.5-72B-Instruct
+    apiKeys: ${HF_API_KEYS}
+    dailyLimit: 200

@@ -1,9 +1,49 @@
 {
-  "name": "auto-model-router",
-  "version": "0.1.0",
-  "description": "OpenAI-compatible router that auto-switches across OpenRouter and HuggingFace free models when rate/usage limits are exceeded.",
+  "name": "@prakashpro1/auto-modal",
+  "version": "1.0.0",
+  "description": "Local proxy that auto-switches models AND API keys when a rate/usage limit is hit. Serves both the OpenAI API (Continue) and the Anthropic Messages API (Claude Code), with a live dashboard.",
   "type": "module",
   "main": "src/server.js",
+  "bin": {
+    "automodal": "bin/cli.mjs"
+  },
+  "files": [
+    "src",
+    "bin",
+    "scripts",
+    "config.default.yaml",
+    ".env.example",
+    "claude-router.sh",
+    "README.md"
+  ],
+  "preferGlobal": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "openrouter",
+    "huggingface",
+    "llm",
+    "proxy",
+    "router",
+    "rate-limit",
+    "fallback",
+    "api-key-rotation",
+    "continue",
+    "claude-code",
+    "anthropic",
+    "openai-compatible"
+  ],
+  "author": "prakash.saeculumsolutions@gmail.com",
+  "license": "MIT",
+  "homepage": "https://github.com/prakashpro3/pro-modal#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prakashpro3/pro-modal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/prakashpro3/pro-modal/issues"
+  },
   "scripts": {
     "prestart": "node scripts/free-port.mjs",
     "start": "node src/server.js",

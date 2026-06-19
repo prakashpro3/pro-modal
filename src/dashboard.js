@@ -5,7 +5,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Auto Model Router — Status</title>
+<title>Auto Modal — Status</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -78,7 +78,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 </style>
 </head>
 <body>
-  <h1><span id="health" class="dot bad"></span>Auto Model Router</h1>
+  <h1><span id="health" class="dot bad"></span>Auto Modal</h1>
   <div class="sub"><span id="meta">connecting…</span>
     &nbsp;·&nbsp; <button id="testall" class="ghostbtn">Test all</button>
     <span id="testallmsg" class="muted"></span>
