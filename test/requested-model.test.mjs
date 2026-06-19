@@ -65,6 +65,9 @@ mock.listen(MOCK_PORT, async () => {
   if (await chat("ghost") !== "a") fail("unknown model should fall back to full chain (a)");
   console.log('PASS  unknown model falls back to chain (a)');
 
+  if (await chat("claude-b") !== "b") fail('"claude-b" alias should route to b');
+  console.log('PASS  "claude-b" alias (Claude Code discovery) routes to b');
+
   console.log("\nAll requested-model tests passed ✅");
   cleanup();
   process.exit(0);

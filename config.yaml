@@ -2,28 +2,28 @@ port: 8787
 cooldownMs: 3600000
 transientRetries: 2
 chain:
-  - id: owl-alpha
-    provider: openrouter
-    model: openrouter/owl-alpha
-    apiKeys: ${OPENROUTER_API_KEYS}
-  - id: hf-qwen
-    provider: huggingface
-    model: Qwen/Qwen2.5-72B-Instruct
-    apiKeys: ${HF_API_KEYS}
-    dailyLimit: 200
   - id: nemotron-super-free
     provider: openrouter
     model: nvidia/nemotron-3-super-120b-a12b:free
     apiKeys: ${OPENROUTER_API_KEYS}
     dailyLimit: 50
     rpm: 20
+  - id: hf-qwen
+    provider: huggingface
+    model: Qwen/Qwen2.5-72B-Instruct
+    apiKeys: ${HF_API_KEYS}
+    dailyLimit: 200
+  - id: free
+    provider: openrouter
+    model: openrouter/free
+    apiKeys: ${OPENROUTER_API_KEYS}
   - id: minimax-m2
     provider: huggingface
     model: MiniMaxAI/MiniMax-M2
     apiKeys: ${HF_API_KEYS}
-  - id: nex-n2-pro-free
+  - id: owl-alpha
     provider: openrouter
-    model: nex-agi/nex-n2-pro:free
+    model: openrouter/owl-alpha
     apiKeys: ${OPENROUTER_API_KEYS}
   - id: vision-gemma
     provider: openrouter

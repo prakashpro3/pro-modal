@@ -117,6 +117,29 @@ embeddings. Use separate Continue models for those.
 The response header `X-Router-Key` tells you which key index answered (alongside
 `X-Router-Model`). Slots in `/usage` are labelled `modelId#keyIndex`.
 
+## Use it with Claude Code CLI
+Claude Code speaks the **Anthropic Messages API**, so the router exposes
+`POST /v1/messages` (+ `/v1/messages/count_tokens`) that translates Anthropic ⇄
+OpenAI — request (system, messages, images, tools), response, and the streaming
+SSE event sequence — then routes through the same chain/key-rotation/limits.
+
+```bash
+npm start                       # router up on :8787
+./claude-router.sh              # launches Claude Code against the router
+```
+The launcher sets `ANTHROPIC_BASE_URL=http://localhost:8787`, `ANTHROPIC_AUTH_TOKEN`,
+and `ANTHROPIC_MODEL` for that invocation only (your normal `claude` is untouched).
+Set `ANTHROPIC_MODEL` to a chain id to pin one model, or `auto` for the full chain.
+Pin via the `claude-<id>` alias too (e.g. `ANTHROPIC_MODEL=claude-owl-alpha`) — the
+router strips the `claude-` prefix to match. `GET /v1/models` advertises every chain
+model under both its real id and a `claude-<id>` alias, so Claude Code's gateway model
+discovery (`CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`, lists only claude/anthropic
+ids) can show them and you can `/model`-switch between them in-session.
+
+> ⚠️ Claude Code is tuned for Claude models (heavy agentic tool use, big context).
+> Free OpenRouter/HF models will connect and respond but are far weaker at tool
+> calling and long agent loops — this is a "make it work" path, not Claude parity.
+
 ## Requesting a specific model
 By default (`model: "auto"`) the router walks the whole chain in priority order.
 If a request's `model` field matches a chain **id** or model **slug**, the router

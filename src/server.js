@@ -4,6 +4,7 @@ import { loadConfig, readRaw, writeRaw, buildConfig, PROVIDERS, resolveKeys } fr
 import { recordSuccess, tripCooldown, isAvailable, tryConsumeToken, snapshot, historyFor } from "./usage.js";
 import { getKeysFor, addKey, removeKey, maskKey } from "./envfile.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
+import { anthropicToOpenAI, openAIToAnthropic, streamAnthropic } from "./anthropic.js";
 
 // `cfg` is reassigned on hot-reload when models are added/removed via the dashboard.
 let cfg = loadConfig();
@@ -59,19 +60,27 @@ function slotsOf(models) {
 // empty, or an unknown id uses the full chain in priority order.
 function slotsFor(requested) {
   if (requested && requested !== "auto") {
-    const matches = cfg.chain.filter((m) => m.id === requested || m.model === requested);
+    // Accept the "claude-<id>" aliases we advertise for Claude Code discovery.
+    const stripped = requested.startsWith("claude-") ? requested.slice(7) : requested;
+    const matches = cfg.chain.filter(
+      (m) => m.id === requested || m.model === requested || m.id === stripped
+    );
     if (matches.length) return slotsOf(matches);
   }
   return slotsOf(cfg.chain);
 }
 
 // Shared routing core: walk the slots, apply limits, forward to `path`,
-// rotate on limit errors. Used by both /chat/completions and /completions.
-async function routeRequest(req, res, path) {
-  const wantStream = req.body?.stream === true;
+// rotate on limit errors. Used by /chat/completions, /completions, /messages.
+// opts.body overrides the forwarded body (e.g. an Anthropic->OpenAI translation);
+// opts.onOk(upstream, ctx) handles a successful response (else default passthrough);
+// opts.onExhausted(res, tried) formats the all-slots-failed error.
+async function routeRequest(req, res, path, opts = {}) {
+  const sendBody = opts.body ?? req.body;
+  const wantStream = sendBody?.stream === true;
   const tried = [];
 
-  for (const { model, keyIdx } of slotsFor(req.body?.model)) {
+  for (const { model, keyIdx } of slotsFor(sendBody?.model)) {
     const slotLabel = `${model.id}#key${keyIdx}`;
     if (!isAvailable(model, keyIdx)) {
       tried.push({ slot: slotLabel, skipped: "cooldown-or-daily-cap" });
@@ -89,7 +98,7 @@ async function routeRequest(req, res, path) {
       attempt++;
       let upstream;
       try {
-        upstream = await callUpstream(model, apiKey, req.body, req.signal, path);
+        upstream = await callUpstream(model, apiKey, sendBody, req.signal, path);
       } catch (err) {
         // Network-level failure -> treat as transient.
         if (attempt <= cfg.transientRetries) {
@@ -105,6 +114,8 @@ async function routeRequest(req, res, path) {
         res.setHeader("X-Router-Model", model.id);
         res.setHeader("X-Router-Upstream", model.model);
         res.setHeader("X-Router-Key", `key${keyIdx}`);
+
+        if (opts.onOk) return await opts.onOk(upstream, { model, keyIdx, wantStream, res });
 
         if (wantStream && upstream.body) {
           res.setHeader("Content-Type", "text/event-stream");
@@ -160,6 +171,7 @@ async function routeRequest(req, res, path) {
   }
 
   // Every (model, key) slot was unavailable or failed.
+  if (opts.onExhausted) return opts.onExhausted(res, tried);
   return res.status(503).json({
     error: {
       message: "All models and API keys are exhausted or unavailable.",
@@ -175,16 +187,51 @@ app.post("/v1/chat/completions", (req, res) => routeRequest(req, res, "/chat/com
 // Text completions / FIM — used by Continue's autocomplete role.
 app.post("/v1/completions", (req, res) => routeRequest(req, res, "/completions"));
 
-// Advertise the chain as available "models" (handy for Continue / OpenAI SDKs).
-app.get("/v1/models", (_req, res) => {
-  res.json({
-    object: "list",
-    data: cfg.chain.map((m) => ({
-      id: m.id,
-      object: "model",
-      owned_by: m.provider,
-    })),
+// Anthropic Messages API — used by Claude Code. Translates the request to
+// OpenAI, routes it through the chain, and translates the response back.
+app.post("/v1/messages", (req, res) => {
+  const model = req.body?.model || "auto";
+  let openaiBody;
+  try {
+    openaiBody = anthropicToOpenAI(req.body || {});
+  } catch (err) {
+    return res.status(400).json({ type: "error", error: { type: "invalid_request_error", message: err.message } });
+  }
+  return routeRequest(req, res, "/chat/completions", {
+    body: openaiBody,
+    onOk: async (upstream, { wantStream }) => {
+      if (wantStream && upstream.body) return streamAnthropic(upstream, res, model);
+      const oj = await upstream.json();
+      return res.json(openAIToAnthropic(oj, model));
+    },
+    onExhausted: (r) => r.status(529).json({
+      type: "error",
+      error: { type: "overloaded_error", message: "All models and API keys are exhausted or unavailable." },
+    }),
   });
+});
+
+// Rough token count (Claude Code may call this). ~4 chars/token estimate.
+app.post("/v1/messages/count_tokens", (req, res) => {
+  const b = req.body || {};
+  let chars = typeof b.system === "string" ? b.system.length : 0;
+  for (const m of b.messages || []) {
+    chars += typeof m.content === "string" ? m.content.length
+      : (m.content || []).reduce((n, blk) => n + (blk.text?.length || 0), 0);
+  }
+  res.json({ input_tokens: Math.max(1, Math.ceil(chars / 4)) });
+});
+
+// Advertise the chain as available "models". Each model is listed twice: under
+// its real id (Continue / OpenAI SDKs) and a "claude-<id>" alias so Claude Code's
+// gateway model discovery (which only shows claude/anthropic ids) can list them.
+app.get("/v1/models", (_req, res) => {
+  const data = [];
+  for (const m of cfg.chain) {
+    data.push({ id: m.id, object: "model", owned_by: m.provider });
+    data.push({ id: `claude-${m.id}`, object: "model", owned_by: m.provider });
+  }
+  res.json({ object: "list", data });
 });
 
 app.get("/usage", (_req, res) => res.json(snapshot()));
