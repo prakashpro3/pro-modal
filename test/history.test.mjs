@@ -40,7 +40,7 @@ const chat = () => api("/v1/chat/completions", {
 
 mock.listen(MOCK_PORT, async () => {
   router = spawn("node", ["src/server.js"], {
-    env: { ...process.env, ROUTER_CONFIG: cfgPath, TESTKEY: "k" }, stdio: "ignore",
+    env: { ...process.env, ROUTER_CONFIG: cfgPath, ROUTER_USAGE: join(dir, "usage.json"), TESTKEY: "k" }, stdio: "ignore",
   });
   await sleep(800);
 

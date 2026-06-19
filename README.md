@@ -117,8 +117,22 @@ embeddings. Use separate Continue models for those.
 The response header `X-Router-Key` tells you which key index answered (alongside
 `X-Router-Model`). Slots in `/usage` are labelled `modelId#keyIndex`.
 
+## Requesting a specific model
+By default (`model: "auto"`) the router walks the whole chain in priority order.
+If a request's `model` field matches a chain **id** or model **slug**, the router
+routes to **just that model** (still rotating its keys) — useful for pinning, e.g.
+image requests, to a specific multimodal model while keeping key rotation. An
+unknown id falls back to the full chain. So one Continue entry with
+`model: vision-gemma` + `capabilities: [image_input]` gets vision *and* rotation.
+
+`ROUTER_USAGE` env var relocates the persisted `usage.json` (default: project dir);
+`ROUTER_CONFIG` and `ROUTER_ENV` likewise relocate `config.yaml` / `.env`.
+
 ## Notes
 - Free-tier daily caps change; tune `dailyLimit` per model in `config.yaml`.
+- Adding an **active free OpenRouter model** with the dashboard's daily-limit field
+  left blank auto-sets `dailyLimit` from your account tier (50, or 1000 once you've
+  bought ≥10 credits) via `GET /api/v1/key`. Provide a value to override.
 - Daily counters roll over at **UTC midnight**.
 - OpenRouter also has native multi-model fallback; this router adds value by
   mixing providers and tracking caps across them.

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { loadConfig, readRaw, writeRaw, buildConfig, PROVIDERS } from "./config.js";
+import { loadConfig, readRaw, writeRaw, buildConfig, PROVIDERS, resolveKeys } from "./config.js";
 import { recordSuccess, tripCooldown, isAvailable, tryConsumeToken, snapshot, historyFor } from "./usage.js";
 import { getKeysFor, addKey, removeKey, maskKey } from "./envfile.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
@@ -41,16 +41,28 @@ function callUpstream(model, apiKey, body, signal, path) {
   });
 }
 
-// Flatten the chain into ordered (model, keyIndex) slots so we iterate keys
+// Flatten given models into ordered (model, keyIndex) slots so we iterate keys
 // AND models in one loop: model-A key0, model-A key1, model-B key0, ...
-function slots() {
+function slotsOf(models) {
   const out = [];
-  for (const model of cfg.chain) {
+  for (const model of models) {
     for (let keyIdx = 0; keyIdx < model.keys.length; keyIdx++) {
       out.push({ model, keyIdx });
     }
   }
   return out;
+}
+
+// Which slots to use for a request. If the client asks for a specific model
+// (by chain id or model slug), route to just that model's keys — so you get key
+// rotation without falling through to other (e.g. text-only) models. "auto",
+// empty, or an unknown id uses the full chain in priority order.
+function slotsFor(requested) {
+  if (requested && requested !== "auto") {
+    const matches = cfg.chain.filter((m) => m.id === requested || m.model === requested);
+    if (matches.length) return slotsOf(matches);
+  }
+  return slotsOf(cfg.chain);
 }
 
 // Shared routing core: walk the slots, apply limits, forward to `path`,
@@ -59,7 +71,7 @@ async function routeRequest(req, res, path) {
   const wantStream = req.body?.stream === true;
   const tried = [];
 
-  for (const { model, keyIdx } of slots()) {
+  for (const { model, keyIdx } of slotsFor(req.body?.model)) {
     const slotLabel = `${model.id}#key${keyIdx}`;
     if (!isAvailable(model, keyIdx)) {
       tried.push({ slot: slotLabel, skipped: "cooldown-or-daily-cap" });
@@ -239,32 +251,33 @@ async function fetchCatalog(provider) {
   return data;
 }
 
-// OpenRouter account credits/usage for the first OpenRouter key (best-effort).
-// Free-tier per-model request caps aren't exposed by any API, so this only
-// reflects credit ($) usage and tier — the per-model "remaining" on the cards
-// is computed from the configured dailyLimit instead.
-app.get("/admin/credits", async (_req, res) => {
-  const key = getKeysFor("OPENROUTER_API_KEYS")[0];
-  if (!key) return res.json({ available: false, reason: "no OpenRouter key" });
+// Query OpenRouter for the account tier behind a key. Returns null if no key or
+// the call fails. freeDailyLimit: 50/day on free tier, 1000/day once >=10 credits
+// bought (per key, SHARED across all :free models).
+async function fetchOpenRouterTier(key) {
+  key = key || getKeysFor("OPENROUTER_API_KEYS")[0];
+  if (!key) return null;
   try {
     const j = await (await fetch("https://openrouter.ai/api/v1/key", {
       headers: { Authorization: `Bearer ${key}` },
     })).json();
     const d = j.data || {};
-    res.json({
-      available: true,
+    return {
       isFreeTier: d.is_free_tier,
       usageDaily: d.usage_daily,
       usage: d.usage,
       limit: d.limit,
       limitRemaining: d.limit_remaining,
-      // OpenRouter free-model daily cap (per key, SHARED across all :free models):
-      // 50/day if no credits purchased, 1000/day once you've bought >= 10 credits.
       freeDailyLimit: d.is_free_tier ? 50 : 1000,
-    });
-  } catch (err) {
-    res.json({ available: false, reason: err.message });
+    };
+  } catch {
+    return null;
   }
+}
+
+app.get("/admin/credits", async (_req, res) => {
+  const tier = await fetchOpenRouterTier();
+  res.json(tier ? { available: true, ...tier } : { available: false, reason: "no OpenRouter key or fetch failed" });
 });
 
 app.get("/admin/catalog", async (req, res) => {
@@ -281,7 +294,7 @@ app.get("/admin/catalog", async (req, res) => {
 
 // --- Admin: add / remove models via the dashboard (writes config.yaml, hot-reloads) ---
 
-app.post("/admin/models", (req, res) => {
+app.post("/admin/models", async (req, res) => {
   const { id, provider, model, apiKeys, dailyLimit, rpm } = req.body || {};
   if (!id || !provider || !model || !apiKeys) {
     return res.status(400).json({ error: "id, provider, model and apiKeys are required" });
@@ -298,6 +311,15 @@ app.post("/admin/models", (req, res) => {
   const entry = { id, provider, model, apiKeys };
   if (dailyLimit !== "" && dailyLimit != null) entry.dailyLimit = Number(dailyLimit);
   if (rpm !== "" && rpm != null) entry.rpm = Number(rpm);
+
+  // Auto-set dailyLimit for an ACTIVE free OpenRouter model when left blank:
+  // pull the real free cap (50/1000) from the account tier.
+  let autoLimit = null;
+  const isActiveFree = provider === "openrouter" && /:free$/.test(model) && resolveKeys(entry).length > 0;
+  if (entry.dailyLimit == null && isActiveFree) {
+    const tier = await fetchOpenRouterTier(resolveKeys(entry)[0]);
+    if (tier?.freeDailyLimit) entry.dailyLimit = autoLimit = tier.freeDailyLimit;
+  }
   raw.chain.push(entry);
 
   try {
@@ -312,6 +334,7 @@ app.post("/admin/models", (req, res) => {
   res.json({
     ok: true,
     active,
+    autoDailyLimit: autoLimit, // set from OpenRouter tier when left blank, else null
     warning: active ? undefined : `Added, but inactive: "${apiKeys}" resolved to no keys (set it in .env).`,
   });
 });

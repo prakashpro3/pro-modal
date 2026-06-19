@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node test/fallback.test.mjs && node test/rpm.test.mjs && node test/completions.test.mjs && node test/admin.test.mjs && node test/keys.test.mjs && node test/reorder.test.mjs && node test/edit-test.test.mjs && node test/history.test.mjs"
+    "test": "node test/fallback.test.mjs && node test/rpm.test.mjs && node test/completions.test.mjs && node test/admin.test.mjs && node test/keys.test.mjs && node test/reorder.test.mjs && node test/edit-test.test.mjs && node test/history.test.mjs && node test/requested-model.test.mjs"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

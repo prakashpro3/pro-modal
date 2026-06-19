@@ -24,7 +24,7 @@ function expandEnv(value) {
 //   apiKeys: ${KEYS}                 -> one env var holding comma-separated keys
 //   apiKey:  ${A}                    -> single key (back-compat)
 // Returns a de-duplicated, non-empty array of resolved key strings.
-function resolveKeys(m) {
+export function resolveKeys(m) {
   let keys = [];
   if (Array.isArray(m.apiKeys)) {
     keys = m.apiKeys.map(expandEnv);

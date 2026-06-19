@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const USAGE_PATH = join(__dirname, "..", "usage.json");
+const USAGE_PATH = process.env.ROUTER_USAGE || join(__dirname, "..", "usage.json");
 
 // Per (model, key-index) state persisted across restarts. The "slot" is the
 // unit of availability — switching a key is just moving to a different slot:

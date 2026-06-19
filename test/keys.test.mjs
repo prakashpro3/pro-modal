@@ -29,7 +29,7 @@ const json = (p) => api(p).then((r) => r.json());
 (async () => {
   router = spawn("node", ["src/server.js"], {
     // ROUTER_ENV points the .env manager at our temp file; clear inherited key.
-    env: { ...process.env, ROUTER_CONFIG: cfgPath, ROUTER_ENV: envPath, OPENROUTER_API_KEYS: "" },
+    env: { ...process.env, ROUTER_CONFIG: cfgPath, ROUTER_ENV: envPath, ROUTER_USAGE: join(dir, "usage.json"), OPENROUTER_API_KEYS: "" },
     stdio: "ignore",
   });
   await sleep(800);

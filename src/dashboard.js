@@ -98,7 +98,7 @@ export const DASHBOARD_HTML = `<!doctype html>
       </label>
       <label>ID (unique label)<input name="id" placeholder="auto from model" required></label>
       <label>API keys (env ref)<input name="apiKeys" value="\${OPENROUTER_API_KEYS}" required></label>
-      <label>Daily limit (optional)<input name="dailyLimit" type="number" placeholder="50"></label>
+      <label>Daily limit (optional)<input name="dailyLimit" type="number" placeholder="auto for free"></label>
       <label>RPM (optional)<input name="rpm" type="number" placeholder="20"></label>
       <button type="submit" class="add-btn">Add model</button>
       <div class="formmsg" id="formmsg"></div>
@@ -366,7 +366,11 @@ document.getElementById("addform").addEventListener("submit", async (e) => {
     const j = await r.json();
     if (!r.ok) { msg.className = "formmsg bad"; msg.textContent = j.error || ("HTTP " + r.status); return; }
     if (j.warning) { msg.className = "formmsg warn"; msg.textContent = j.warning; }
-    else { msg.className = "formmsg ok"; msg.textContent = "Added \\"" + body.id + "\\" — live now."; }
+    else {
+      msg.className = "formmsg ok";
+      msg.textContent = "Added \\"" + body.id + "\\" — live now." +
+        (j.autoDailyLimit ? " Daily limit auto-set to " + j.autoDailyLimit + "/day (OpenRouter free tier)." : "");
+    }
     f.id.dataset.touched = "";
     f.reset();
     onProviderChange();

@@ -68,7 +68,7 @@ function cleanup() {
 
 mock.listen(MOCK_PORT, async () => {
   router = spawn("node", ["src/server.js"], {
-    env: { ...process.env, ROUTER_CONFIG: cfgPath },
+    env: { ...process.env, ROUTER_CONFIG: cfgPath, ROUTER_USAGE: join(dir, "usage.json") },
     stdio: "ignore",
   });
   await sleep(800);

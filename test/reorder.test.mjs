@@ -28,7 +28,7 @@ const ids = async () => (await (await api("/status")).json()).chain.map((m) => m
 
 (async () => {
   router = spawn("node", ["src/server.js"], {
-    env: { ...process.env, ROUTER_CONFIG: cfgPath, TESTKEY: "k", UNSET_X: "" },
+    env: { ...process.env, ROUTER_CONFIG: cfgPath, ROUTER_USAGE: join(dir, "usage.json"), TESTKEY: "k", UNSET_X: "" },
     stdio: "ignore",
   });
   await sleep(800);
