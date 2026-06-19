@@ -2,160 +2,237 @@
 
 ![Dashboard](dashboard.png)
 
-An OpenAI-compatible proxy that **automatically switches models AND API keys when
-a usage/rate limit is exceeded**. Each model has a pool of keys; when a model+key
-returns `429` (rate limit) or `402` (out of credits), the router cools that slot
-down and rotates to the next **key**, then the next **model** — transparently,
-in the same request. It only fails once *every key of every model* is spent.
+A local proxy that **automatically switches models AND API keys when a usage/rate
+limit is exceeded**. Each model has a pool of keys; when a model+key returns `429`
+(rate limit) or `402` (out of credits), the router cools that slot down and rotates
+to the next **key**, then the next **model** — transparently, in the same request.
+It only fails once *every key of every model* is spent.
+
+It speaks **both** API dialects from one endpoint:
+
+| Client | API it expects | Router endpoint |
+|---|---|---|
+| **Continue**, OpenAI SDKs, curl | OpenAI | `/v1/chat/completions`, `/v1/completions` |
+| **Claude Code CLI** | Anthropic | `/v1/messages` (translated ⇄ OpenAI) |
 
 ```
-client / Continue ──► router (/v1/chat/completions)
-   deepseek-free (OpenRouter)  key0 →429→ key1 →429→ ┐
-   llama-free    (OpenRouter)  key0 →429→ key1 →429→ ┤ rotate key, then model
-   hf-qwen       (HuggingFace) key0 →429→ key1  ✅  ◄┘
+client ──► router ──►  nemotron-free (OpenRouter)  key0 →429→ key1 →429→ ┐
+                       owl-alpha     (OpenRouter)  key0 →429→ key1 →429→ ┤ rotate key,
+                       qwen-72b      (HuggingFace) key0 ✅              ◄┘ then model
 ```
+
+---
 
 ## Features
-- **Model switching** on `429` / `402` / network errors.
-- **API-key rotation** — each model holds a key pool; a limited key is skipped
-  and the next key (even a different account) is tried automatically.
-- **Usage tracking** — counts requests per `(model, key)` per day (persisted to
-  `usage.json`) and proactively skips a slot once it hits its `dailyLimit`.
-- **Per-minute rate limit** — a token bucket per slot (`rpm`) rotates to another
-  slot *before* the upstream returns `429`, smoothing load across keys/models.
+
+- **Model + key rotation** on `429` / `402` / network errors — each model holds a
+  key pool; a limited key is skipped and the next (even a different account) is tried.
+- **Per-day caps** — counts requests per `(model, key)` (persisted to `usage.json`)
+  and proactively skips a slot at its `dailyLimit`.
+- **Per-minute rate limit** — a token bucket per slot (`rpm`) rotates *before* the
+  upstream returns `429`, smoothing load.
 - **Cooldown** — a slot that just hit a limit is skipped for `cooldownMs`.
-- **Transient retries** — `5xx` / timeouts retry the same model before switching.
-- **Streaming passthrough** (`stream: true`) and non-streaming.
-- **Two endpoints** behind the same routing: `/v1/chat/completions` (chat/edit)
-  and `/v1/completions` (autocomplete/FIM). A slot that 404s the completions
-  endpoint is skipped, so a mixed chain still serves autocomplete.
-- Drop-in **OpenAI-compatible** endpoint → works with Continue, OpenAI SDKs, curl.
+- **Transient retries** — `5xx` / timeouts retry the same slot before rotating.
+- **Streaming** (SSE) and non-streaming, on every endpoint.
+- **Two API dialects** — OpenAI (Continue) and Anthropic (Claude Code), same routing.
+- **Live dashboard** — add/test/edit/reorder/delete models, add/remove keys, watch
+  per-slot usage, sparklines, and the real OpenRouter free-pool — all hot-reloaded.
+
+---
 
 ## Setup
+
 ```bash
+cd /Users/prakash/Saeculum/AI/AutoModel
 npm install
-cp .env.example .env      # add OPENROUTER_API_KEY and HF_API_KEY
-npm start
+cp .env.example .env          # add your keys (comma-separated for multiple)
+npm start                     # → http://localhost:8787
 ```
-Edit `config.yaml` to change the model `chain`, `dailyLimit`s, and `cooldownMs`.
 
-## Use it
-
-### curl
+`.env`:
 ```bash
-curl http://localhost:8787/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"auto","messages":[{"role":"user","content":"hi"}]}'
+OPENROUTER_API_KEYS=sk-or-1...,sk-or-2...   # as many as you have; rotated automatically
+HF_API_KEYS=hf_1...,hf_2...
 ```
-The response header `X-Router-Model` tells you which model actually answered.
 
-### Continue (config.yaml)
+Verify: `curl -s http://localhost:8787/health` → `{"ok":true,"models":N}`.
+Open the dashboard at <http://localhost:8787/> to manage everything visually.
+
+---
+
+## Use it with Continue (VS Code)
+
+Add to `~/.continue/config.yaml`:
 ```yaml
 models:
-  - name: Auto Router
+  - name: Pro Model
     provider: openai
-    model: auto
+    model: auto                 # router picks the model (chain + rotation)
     apiBase: http://localhost:8787/v1
-    apiKey: dummy   # router holds the real keys
-    roles:
-      - chat
-      - edit
-      - apply
-      - autocomplete   # uses /v1/completions, routed the same way
+    apiKey: dummy               # router holds the real keys
+    roles: [chat, edit, apply, autocomplete]
 ```
-Skip the `embed` / `rerank` roles — the router only proxies completions, not
-embeddings. Use separate Continue models for those.
+- Skip `embed` / `rerank` — the router proxies completions only; use separate models.
+- **Autocomplete** uses `/v1/completions`, routed the same way.
+- **Images:** point a dedicated entry at a vision model with `capabilities: [image_input]`
+  (free text models can't accept images). Route it through the router with
+  `model: <vision-chain-id>` to keep key rotation.
 
-### Inspect
-- **`GET /`** — live **dashboard** (auto-refreshes every 2s): one card per model,
-  a row per key-slot showing status, today's count vs `dailyLimit`, tokens/min,
-  and cooldown countdown. Open <http://localhost:8787/> in a browser.
-  **Add / remove models right from the dashboard** — the "+ Add a model" form has a
-  **searchable model picker** that pulls the live catalog from the provider
-  (`GET /admin/catalog?provider=…`, proxying OpenRouter's and HuggingFace's public
-  model lists), filterable to free models, with the ID and key-env auto-filled.
-  The ✕ on each card removes it. Both write to `config.yaml` and hot-reload the
-  chain (no restart). Backed by `POST /admin/models` and `DELETE /admin/models/:id`.
-  Note: editing via the dashboard normalizes `config.yaml` and drops inline comments.
-  **Manage API keys from the dashboard too** — the "🔑 API keys" panel lists each
-  key pool (masked) and lets you add/remove keys. Adding a key appends it to the
-  right env var in `.env`, updates the live process, and hot-reloads — so a model
-  that was inactive for lack of keys goes live immediately. Backed by
-  `GET/POST/DELETE /admin/keys`.
-  **Drag-to-reorder priority** — drag the model cards to change the chain order
-  (each card shows its `#priority`). On drop it persists and hot-reloads via
-  `PUT /admin/models/order`. Unlisted/inactive models keep their slots.
-  **Test** a model (per-card button) fires one real request through just that
-  model and shows ok/latency/sample or the error — confirms a key/slug works
-  (`POST /admin/models/:id/test`, not counted toward usage). **Edit** (✎) changes
-  a model's `rpm`/`dailyLimit` inline (`PATCH /admin/models/:id`). **Test all**
-  (button by the header) pings every model in parallel and reports `healthy/total`
-  plus which ids are dead (`POST /admin/test-all`). Test results persist across the
-  2s auto-refresh.
-- `GET /status` — the dashboard's data: configured chain merged with live usage,
-  including a per-slot `history` array (last 30 one-minute buckets of served
-  requests) rendered as a **sparkline** in each slot's "Traffic · 30m" column.
-  Each card also shows **"Today: N of T left"** — remaining requests vs. the
-  combined daily budget (`dailyLimit × #keys`), resetting at UTC midnight.
-- `GET /admin/credits` — OpenRouter account tier + credit usage ($), and the
-  derived **`freeDailyLimit`** (50/day on free tier, 1000/day once ≥10 credits
-  bought). The header shows an accurate **OpenRouter free pool: N of T left** —
-  the free cap is per key and **shared across all `:free` models**, so this sums
-  today's requests over every free OpenRouter slot (`freeDailyLimit × #keys`).
-- `GET /usage`  — raw per-slot counts + remaining cooldown.
-- `GET /health` — liveness + model count.
-- `GET /v1/models` — the chain as OpenAI-style model list.
-
-## How "limit exceeded" is detected
-| Upstream status | Action |
-|---|---|
-| `429`, `402`        | cool down this `(model, key)` → **rotate key, then model** |
-| `500/502/503/504`   | retry same slot (`transientRetries`), then rotate |
-| other `4xx`         | return to client (won't be fixed by switching) |
-| `2xx`               | success → record usage for that `(model, key)` |
-
-The response header `X-Router-Key` tells you which key index answered (alongside
-`X-Router-Model`). Slots in `/usage` are labelled `modelId#keyIndex`.
+---
 
 ## Use it with Claude Code CLI
-Claude Code speaks the **Anthropic Messages API**, so the router exposes
-`POST /v1/messages` (+ `/v1/messages/count_tokens`) that translates Anthropic ⇄
-OpenAI — request (system, messages, images, tools), response, and the streaming
-SSE event sequence — then routes through the same chain/key-rotation/limits.
 
+Claude Code speaks the **Anthropic Messages API**; the router exposes `POST /v1/messages`
+(+ `/v1/messages/count_tokens`) and translates request/response/streaming-SSE and tool
+calls ⇄ OpenAI, then routes through the same chain.
+
+**Prerequisites:** router installed (`npm install`), keys in `.env`, and the `claude`
+CLI installed.
+
+### Step 1 — Start the router (Terminal A)
 ```bash
-npm start                       # router up on :8787
-./claude-router.sh              # launches Claude Code against the router
+cd /Users/prakash/Saeculum/AI/AutoModel
+npm start
+curl -s http://localhost:8787/health     # → {"ok":true,"models":N}
 ```
-The launcher sets `ANTHROPIC_BASE_URL=http://localhost:8787`, `ANTHROPIC_AUTH_TOKEN`,
-and `ANTHROPIC_MODEL` for that invocation only (your normal `claude` is untouched).
-Set `ANTHROPIC_MODEL` to a chain id to pin one model, or `auto` for the full chain.
-Pin via the `claude-<id>` alias too (e.g. `ANTHROPIC_MODEL=claude-owl-alpha`) — the
-router strips the `claude-` prefix to match. `GET /v1/models` advertises every chain
-model under both its real id and a `claude-<id>` alias, so Claude Code's gateway model
-discovery (`CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`, lists only claude/anthropic
-ids) can show them and you can `/model`-switch between them in-session.
+
+### Step 2 — Launch Claude Code through the router (Terminal B)
+```bash
+cd /Users/prakash/Saeculum/AI/AutoModel
+./claude-router.sh                        # interactive
+./claude-router.sh -p "explain this repo" # headless / one-shot
+```
+The launcher checks the router is up, then sets these **for that invocation only**
+(your normal `claude` stays on real Anthropic):
+```bash
+ANTHROPIC_BASE_URL=http://localhost:8787
+ANTHROPIC_AUTH_TOKEN=dummy        # router holds the real provider keys
+ANTHROPIC_MODEL=auto              # full chain + rotation
+ANTHROPIC_SMALL_FAST_MODEL=auto
+```
+Prefer manual env vars instead of the script? Export the four above and run `claude`.
+
+### Step 3 (optional) — Pick a model
+- **Auto chain** (default): `ANTHROPIC_MODEL=auto` — rotates models + keys.
+- **Pin one**: `ANTHROPIC_MODEL=claude-owl-alpha ./claude-router.sh` — the router
+  strips the `claude-` prefix to match a chain id.
+- **Switch in-session**: `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 ./claude-router.sh`,
+  then type `/model` and pick a `claude-<id>` entry (advertised via `GET /v1/models`).
+
+### Step 4 — Watch it work
+Open <http://localhost:8787/> while you use Claude Code — requests land on slots,
+sparklines grow, daily/free-pool counters tick.
+
+### Sanity test
+```bash
+./claude-router.sh -p "What is 2+2? Reply with just the number."   # → 4
+```
+
+### Troubleshooting
+| Symptom | Fix |
+|---|---|
+| `✗ Router not reachable` | Start the router (Step 1). |
+| `overloaded_error` / 529 | All slots exhausted (e.g. free daily pool spent) — add a key in the 🔑 dashboard, or wait for 00:00 UTC. |
+| Flaky tool calls / odd multi-step | Expected on free models — pin a tool-capable one (`claude-owl-alpha`). |
 
 > ⚠️ Claude Code is tuned for Claude models (heavy agentic tool use, big context).
-> Free OpenRouter/HF models will connect and respond but are far weaker at tool
-> calling and long agent loops — this is a "make it work" path, not Claude parity.
+> Free OpenRouter/HF models connect and respond but are far weaker at tool calling
+> and long agent loops — a "make it work" path, not Claude parity.
 
-## Requesting a specific model
-By default (`model: "auto"`) the router walks the whole chain in priority order.
-If a request's `model` field matches a chain **id** or model **slug**, the router
-routes to **just that model** (still rotating its keys) — useful for pinning, e.g.
-image requests, to a specific multimodal model while keeping key rotation. An
-unknown id falls back to the full chain. So one Continue entry with
-`model: vision-gemma` + `capabilities: [image_input]` gets vision *and* rotation.
+---
 
-`ROUTER_USAGE` env var relocates the persisted `usage.json` (default: project dir);
-`ROUTER_CONFIG` and `ROUTER_ENV` likewise relocate `config.yaml` / `.env`.
+## Dashboard (`GET /`)
+
+Auto-refreshes every 2s. One card per model, a row per key-slot.
+
+- **Add a model** — searchable picker pulling each provider's live catalog
+  (filter to free, sorted by context); ID + key-env auto-filled. Active free
+  OpenRouter models auto-set `dailyLimit` from your account tier.
+- **🔑 API keys** — list (masked) / add / remove keys; writes `.env`, hot-reloads,
+  activates key-less models instantly.
+- **Drag-to-reorder** priority · **Test** / **Test all** (real ping, ok/latency) ·
+  **Edit** `rpm`/`dailyLimit` inline · **Delete**.
+- **Per-slot sparkline** (last 30 min) + **"Today: N of T left"** per model.
+- **OpenRouter free pool** header — the real shared cap (50/day free tier, 1000/day
+  once ≥10 credits bought) summed across all `:free` models.
+
+All edits write `config.yaml` / `.env` and hot-reload — no restart. (Dashboard edits
+normalize `config.yaml` and drop inline comments.)
+
+---
+
+## API endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /v1/chat/completions` | OpenAI chat (Continue chat/edit/apply) |
+| `POST /v1/completions` | OpenAI text/FIM (Continue autocomplete) |
+| `POST /v1/messages` | Anthropic Messages (Claude Code), translated |
+| `POST /v1/messages/count_tokens` | Token estimate for Claude Code |
+| `GET /v1/models` | Chain as model list (+ `claude-<id>` aliases) |
+| `GET /` | Live dashboard |
+| `GET /status` | Chain + live usage (powers the dashboard) |
+| `GET /usage` | Raw per-slot counts + cooldown |
+| `GET /health` | Liveness + model count |
+| `GET /admin/credits` | OpenRouter tier + credit usage + derived free cap |
+| `GET /admin/catalog?provider=` | Live provider model catalog (picker) |
+| `POST/PATCH/DELETE /admin/models[...]` | Add / edit / delete / reorder / test models |
+| `GET/POST/DELETE /admin/keys` | Manage key pools |
+
+Response headers: `X-Router-Model`, `X-Router-Key`, `X-Router-Upstream` reveal which
+slot answered. Slots in `/usage` are labelled `modelId#keyIndex`.
+
+---
+
+## How "limit exceeded" is detected
+
+| Upstream status | Action |
+|---|---|
+| `429`, `402` | cool down this `(model, key)` → **rotate key, then model** |
+| `500/502/503/504` | retry same slot (`transientRetries`), then rotate |
+| `404` | endpoint unsupported by this slot → rotate (don't fail) |
+| other `4xx` | return to client (won't be fixed by switching) |
+| `2xx` | success → record usage for that `(model, key)` |
+
+---
+
+## Configuration (`config.yaml`)
+
+```yaml
+port: 8787
+cooldownMs: 3600000        # how long a limited slot rests
+transientRetries: 2        # retries on 5xx/timeout before rotating
+chain:                     # order = priority
+  - id: nemotron-super-free
+    provider: openrouter   # "openrouter" | "huggingface"
+    model: nvidia/nemotron-3-super-120b-a12b:free
+    apiKeys: ${OPENROUTER_API_KEYS}   # one env var, comma-separated, rotated
+    dailyLimit: 50         # per key (optional)
+    rpm: 20                # per-key requests/min token bucket (optional)
+```
+
+**Requesting a specific model:** if a request's `model` matches a chain **id** or
+**slug** (or `claude-<id>`), it routes to just that model (keeping key rotation);
+`auto`/unknown uses the full chain.
+
+**Env overrides:** `ROUTER_CONFIG`, `ROUTER_ENV`, `ROUTER_USAGE` relocate
+`config.yaml` / `.env` / `usage.json`.
+
+---
 
 ## Notes
-- Free-tier daily caps change; tune `dailyLimit` per model in `config.yaml`.
-- Adding an **active free OpenRouter model** with the dashboard's daily-limit field
-  left blank auto-sets `dailyLimit` from your account tier (50, or 1000 once you've
-  bought ≥10 credits) via `GET /api/v1/key`. Provide a value to override.
+
 - Daily counters roll over at **UTC midnight**.
-- OpenRouter also has native multi-model fallback; this router adds value by
-  mixing providers and tracking caps across them.
+- OpenRouter free limit is **per key, shared across all `:free` models** — the
+  dashboard's free-pool line reflects this real cap; per-model `dailyLimit` is what
+  the router itself enforces to rotate early.
+- Token buckets and request history are in-memory (reset on restart); daily counts
+  and cooldowns persist in `usage.json`.
+
+## Development
+
+```bash
+npm test     # 10 integration test suites (routing, rotation, rpm, limits,
+             # completions, admin/keys/reorder/edit, history, Anthropic /v1/messages)
+npm run dev  # auto-restart on change
+```
