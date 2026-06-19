@@ -43,7 +43,7 @@ client ──► router ──►  nemotron-free (OpenRouter)  key0 →429→ ke
 ## Setup
 
 ```bash
-cd /Users/prakash/Saeculum/AI/AutoModel
+cd <path-to-automodel>
 npm install
 cp .env.example .env          # add your keys (comma-separated for multiple)
 npm start                     # → http://localhost:8787
@@ -57,6 +57,10 @@ HF_API_KEYS=hf_1...,hf_2...
 
 Verify: `curl -s http://localhost:8787/health` → `{"ok":true,"models":N}`.
 Open the dashboard at <http://localhost:8787/> to manage everything visually.
+
+> `npm start` self-guards: a `prestart` hook kills any stale instance already on
+> the port first, so you never end up with two routers fighting over state. Use
+> `npm run restart` to force a clean restart.
 
 ---
 
@@ -91,14 +95,14 @@ CLI installed.
 
 ### Step 1 — Start the router (Terminal A)
 ```bash
-cd /Users/prakash/Saeculum/AI/AutoModel
+cd <path-to-automodel>
 npm start
 curl -s http://localhost:8787/health     # → {"ok":true,"models":N}
 ```
 
 ### Step 2 — Launch Claude Code through the router (Terminal B)
 ```bash
-cd /Users/prakash/Saeculum/AI/AutoModel
+cd <path-to-automodel>
 ./claude-router.sh                        # interactive
 ./claude-router.sh -p "explain this repo" # headless / one-shot
 ```

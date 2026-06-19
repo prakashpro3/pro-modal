@@ -5,7 +5,10 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
+    "prestart": "node scripts/free-port.mjs",
     "start": "node src/server.js",
+    "restart": "node scripts/free-port.mjs && node src/server.js",
+    "predev": "node scripts/free-port.mjs",
     "dev": "node --watch src/server.js",
     "test": "node test/fallback.test.mjs && node test/rpm.test.mjs && node test/completions.test.mjs && node test/admin.test.mjs && node test/keys.test.mjs && node test/reorder.test.mjs && node test/edit-test.test.mjs && node test/history.test.mjs && node test/requested-model.test.mjs && node test/messages.test.mjs"
   },

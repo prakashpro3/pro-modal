@@ -527,8 +527,17 @@ app.delete("/admin/models/:id", (req, res) => {
   res.json({ ok: true });
 });
 
-app.listen(cfg.port, () => {
+const server = app.listen(cfg.port, () => {
   console.log(`auto-model-router listening on http://localhost:${cfg.port}`);
   console.log(`  dashboard: http://localhost:${cfg.port}/`);
   console.log(`  chain: ${cfg.chain.map((m) => m.id).join(" -> ")}`);
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`✗ Port ${cfg.port} is already in use — another router is running.`);
+    console.error(`  Run "npm run restart" to stop it and start fresh.`);
+    process.exit(1);
+  }
+  throw err;
 });
