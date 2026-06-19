@@ -106,6 +106,12 @@ cd <path-to-automodel>
 ./claude-router.sh                        # interactive
 ./claude-router.sh -p "explain this repo" # headless / one-shot
 ```
+
+**Tip — short command from anywhere.** Symlink the launcher onto your PATH once:
+```bash
+ln -sf "$PWD/claude-router.sh" ~/.local/bin/claudepro
+```
+Then just run `claudepro` (or `claudepro -p "..."`) from any directory.
 The launcher checks the router is up, then sets these **for that invocation only**
 (your normal `claude` stays on real Anthropic):
 ```bash
