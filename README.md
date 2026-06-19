@@ -40,39 +40,40 @@ client ──► router ──►  nemotron-free (OpenRouter)  key0 →429→ ke
 
 ---
 
-## Install as a CLI
+## Quick start (global, via npx)
 
-**Global** (one `automodal` command everywhere):
+One global config in `~/.auto-modal`, used everywhere — no install, no per-project setup:
+
 ```bash
-npm install -g @prakashpro1/auto-modal     # → `automodal` on your PATH
-automodal init                # creates ~/.auto-modal/{config.yaml,.env}
-# add your keys to ~/.auto-modal/.env  (or use the dashboard 🔑 panel)
-automodal                     # start the router → http://localhost:8787
+npx -y @prakashpro1/auto-modal init     # creates ~/.auto-modal/{config.yaml,.env}
+#  → add your OpenRouter / HF keys to ~/.auto-modal/.env  (or the dashboard 🔑 panel)
+npx @prakashpro1/auto-modal             # start the router → http://localhost:8787
+npx @prakashpro1/auto-modal claude      # launch Claude Code through it
 ```
 
-**Per-project** (scoped to one repo, run via `npx`):
-```bash
-cd your-project
-npm install @prakashpro1/auto-modal              # add as a dependency
-npx automodal init --local          # creates ./.auto-modal/ for THIS project
-npx automodal                       # start it
-```
-Add `.auto-modal/` to the project's `.gitignore` — it holds your keys.
+Run it from any directory — with no `./.auto-modal` around, it always uses the global
+`~/.auto-modal`. npx caches the package after the first download, so later runs are fast.
 
-Commands (run from anywhere):
+### Prefer a short command? Install globally once
+```bash
+npm install -g @prakashpro1/auto-modal   # → `automodal` on your PATH
+automodal init                           # ~/.auto-modal/{config.yaml,.env}
+automodal                                # start (type `automodal`, not the full npx line)
+```
+
+Commands (run from anywhere — prefix with `npx @prakashpro1/auto-modal` if not installed globally):
 | Command | Does |
 |---|---|
 | `automodal` / `automodal start` | start the router (auto-kills any stale instance first) |
 | `automodal claude [args]` | launch Claude Code through the router |
-| `automodal init [--local]` | create global `~/.auto-modal` (or project `./.auto-modal`) |
+| `automodal init` | create the global `~/.auto-modal` config |
 | `automodal where` | print which config / `.env` / `usage.json` is in effect |
 | `automodal --help` | usage |
 
-**Config resolution** (highest priority first):
-`AUTOMODAL_HOME` env  →  nearest `./.auto-modal` (walking up from cwd)  →  `~/.auto-modal`.
-
-So a project with its own `./.auto-modal/` uses that (its own chain + keys); anywhere
-else falls back to the global `~/.auto-modal/`. The CLI never writes inside the package.
+Config lives in **`~/.auto-modal`** (override with `AUTOMODAL_HOME`). The CLI never
+writes inside the package. *(Advanced: a `./.auto-modal` dir in the current folder
+overrides the global one — handy if you ever want a project-specific chain. Create it
+with `automodal init --local`.)*
 
 ## Setup (from source / dev)
 
@@ -124,43 +125,36 @@ Claude Code speaks the **Anthropic Messages API**; the router exposes `POST /v1/
 (+ `/v1/messages/count_tokens`) and translates request/response/streaming-SSE and tool
 calls ⇄ OpenAI, then routes through the same chain.
 
-**Prerequisites:** router installed (`npm install`), keys in `.env`, and the `claude`
-CLI installed.
+**Prerequisites:** the global config set up (`automodal init`) with keys in
+`~/.auto-modal/.env`, and the `claude` CLI installed.
 
 ### Step 1 — Start the router (Terminal A)
 ```bash
-cd <path-to-automodal>
-npm start
-curl -s http://localhost:8787/health     # → {"ok":true,"models":N}
+automodal                                    # or: npx @prakashpro1/auto-modal
+curl -s http://localhost:8787/health         # → {"ok":true,"models":N}
 ```
 
 ### Step 2 — Launch Claude Code through the router (Terminal B)
-If you installed the global CLI, just run from anywhere:
 ```bash
-automodal claude                          # interactive
-automodal claude -p "explain this repo"   # headless / one-shot
+automodal claude                             # interactive
+automodal claude -p "explain this repo"      # headless / one-shot
+#  npx form: npx @prakashpro1/auto-modal claude
 ```
-From source (no global install), use the bundled launcher:
-```bash
-cd <path-to-automodal>
-./claude-router.sh                        # interactive
-./claude-router.sh -p "explain this repo" # headless / one-shot
-```
-The launcher checks the router is up, then sets these **for that invocation only**
-(your normal `claude` stays on real Anthropic):
+`automodal claude` sets these **for that invocation only** (your normal `claude`
+stays on real Anthropic):
 ```bash
 ANTHROPIC_BASE_URL=http://localhost:8787
 ANTHROPIC_AUTH_TOKEN=dummy        # router holds the real provider keys
 ANTHROPIC_MODEL=auto              # full chain + rotation
 ANTHROPIC_SMALL_FAST_MODEL=auto
 ```
-Prefer manual env vars instead of the script? Export the four above and run `claude`.
+Prefer manual env vars? Export the four above and run `claude`.
 
 ### Step 3 (optional) — Pick a model
 - **Auto chain** (default): `ANTHROPIC_MODEL=auto` — rotates models + keys.
-- **Pin one**: `ANTHROPIC_MODEL=claude-owl-alpha ./claude-router.sh` — the router
+- **Pin one**: `ANTHROPIC_MODEL=claude-owl-alpha automodal claude` — the router
   strips the `claude-` prefix to match a chain id.
-- **Switch in-session**: `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 ./claude-router.sh`,
+- **Switch in-session**: `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 automodal claude`,
   then type `/model` and pick a `claude-<id>` entry (advertised via `GET /v1/models`).
 
 ### Step 4 — Watch it work
@@ -169,7 +163,7 @@ sparklines grow, daily/free-pool counters tick.
 
 ### Sanity test
 ```bash
-./claude-router.sh -p "What is 2+2? Reply with just the number."   # → 4
+automodal claude -p "What is 2+2? Reply with just the number."   # → 4
 ```
 
 ### Troubleshooting
