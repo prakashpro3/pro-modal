@@ -1,0 +1,20 @@
+{
+  "name": "auto-model-router",
+  "version": "0.1.0",
+  "description": "OpenAI-compatible router that auto-switches across OpenRouter and HuggingFace free models when rate/usage limits are exceeded.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/fallback.test.mjs && node test/rpm.test.mjs && node test/completions.test.mjs && node test/admin.test.mjs && node test/keys.test.mjs && node test/reorder.test.mjs && node test/edit-test.test.mjs && node test/history.test.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "yaml": "^2.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
