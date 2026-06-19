@@ -75,27 +75,8 @@ writes inside the package. *(Advanced: a `./.auto-modal` dir in the current fold
 overrides the global one — handy if you ever want a project-specific chain. Create it
 with `automodal init --local`.)*
 
-## Setup (from source / dev)
-
-```bash
-cd <path-to-automodal>
-npm install
-cp .env.example .env          # add your keys (comma-separated for multiple)
-npm start                     # → http://localhost:8787
-```
-
-`.env`:
-```bash
-OPENROUTER_API_KEYS=sk-or-1...,sk-or-2...   # as many as you have; rotated automatically
-HF_API_KEYS=hf_1...,hf_2...
-```
-
-Verify: `curl -s http://localhost:8787/health` → `{"ok":true,"models":N}`.
-Open the dashboard at <http://localhost:8787/> to manage everything visually.
-
-> `npm start` self-guards: a `prestart` hook kills any stale instance already on
-> the port first, so you never end up with two routers fighting over state. Use
-> `npm run restart` to force a clean restart.
+> Running from source, contributing, testing, or publishing? See
+> **[DEVELOPMENT.md](DEVELOPMENT.md)**.
 
 ---
 
@@ -269,8 +250,5 @@ chain:                     # order = priority
 
 ## Development
 
-```bash
-npm test     # 10 integration test suites (routing, rotation, rpm, limits,
-             # completions, admin/keys/reorder/edit, history, Anthropic /v1/messages)
-npm run dev  # auto-restart on change
-```
+Running from source, the test suite, project layout, and publishing are documented
+in **[DEVELOPMENT.md](DEVELOPMENT.md)**.
