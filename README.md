@@ -1,5 +1,7 @@
 # Auto Model Router
 
+![Dashboard](dashboard.png)
+
 An OpenAI-compatible proxy that **automatically switches models AND API keys when
 a usage/rate limit is exceeded**. Each model has a pool of keys; when a model+key
 returns `429` (rate limit) or `402` (out of credits), the router cools that slot
