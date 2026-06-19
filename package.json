@@ -1,6 +1,6 @@
 {
   "name": "@prakashpro1/auto-modal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local proxy that auto-switches models AND API keys when a rate/usage limit is hit. Serves both the OpenAI API (Continue) and the Anthropic Messages API (Claude Code), with a live dashboard.",
   "type": "module",
   "main": "src/server.js",
